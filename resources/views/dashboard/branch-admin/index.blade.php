@@ -183,6 +183,7 @@
             dt = dataTableInit({
                 selector: '#trx-table',
                 title: 'Transaction Nominal',
+                pageLength: 10,
                 btnTools: true, btnExcel: true, btnPdf: true,
                 rowIndex: true,
                 order: [[2, 'desc']], // by date desc
