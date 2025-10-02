@@ -59,6 +59,55 @@
             <x-button class="btn-primary btn-sm" id="btn-validate" label="Validasi" />
         @endslot
     </x-modal>
+
+    <x-modal id="modal-detail" title="Transaction Detail">
+        <div class="mb-2 d-flex justify-content-between">
+            <div>
+                <strong id="d-doc">#</strong><br>
+                <small class="text-muted" id="d-date">-</small>
+            </div>
+            <span class="badge bg-secondary" id="d-status">-</span>
+        </div>
+        <div class="row g-2 mb-2">
+            <div class="col">
+                <small class="text-muted d-block">Cabang</small>
+                <div id="d-branch">-</div>
+            </div>
+            <div class="col">
+                <small class="text-muted d-block">Sales</small>
+                <div id="d-sales">-</div>
+            </div>
+            <div class="col">
+                <small class="text-muted d-block">Pelanggan</small>
+                <div id="d-customer">-</div>
+            </div>
+        </div>
+        <div class="border rounded p-2 mb-2">
+            <div class="d-flex justify-content-between"><span>Total</span> <strong id="d-total">IDR 0</strong></div>
+            <div class="d-flex justify-content-between"><span>Terbayar</span>  <strong id="d-paid">IDR 0</strong></div>
+            <hr class="my-2">
+            <div class="d-flex justify-content-between"><span>Selisih (Terbayar - Total)</span> <strong id="d-disc" class="text-danger">IDR 0</strong></div>
+        </div>
+        <div class="mb-2">
+            <small class="text-muted d-block">Tipe Pembayaran</small>
+            <div id="d-paytypes">-</div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Tipe Pembayaran</th>
+                        <th>Nominal</th>
+                        <th>Bank</th>
+                        <th>Bank Doc</th>
+                        <th>Bank Due</th>
+                    </tr>
+                </thead>
+                <tbody id="d-rows"><tr><td colspan="6" class="text-muted">Data Belum Ada</td></tr></tbody>
+            </table>
+        </div>
+    </x-modal>
 @endsection
 
 @push('js')
@@ -116,6 +165,76 @@
         $el.val('false').trigger('change')
     }
     @endif
+
+    function fmtIDR(n) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(n || 0));
+    }
+
+    function computeStatus(total, paid) {
+        if (paid > total) return 'OVERPAID';
+        if (paid < total) return 'UNDERPAID';
+        return 'SESUAI';
+    }
+
+    function openDetail(row) {
+        $('#d-doc').text(row.doc_id || '-');
+        $('#d-date').text(row.date || '-');
+        $('#d-branch').text(row.branch_name || row.branch_code || '-');
+        $('#d-sales').text(row.sales_name || row.sales_code || '-');
+        $('#d-customer').text(row.customer_name || row.customer_code || '-');
+
+        const total = Number(row.total || 0), paid = Number(row.paid_amount || 0), disc = Number(row.discrepancy ?? (paid - total));
+        $('#d-total').text(fmtIDR(total));
+        $('#d-paid').text(fmtIDR(paid));
+        $('#d-disc').text(fmtIDR(disc));
+
+        // Add color for status
+        const status = computeStatus(total, paid);
+        let badgeClass = 'bg-secondary';
+        if (status === 'SESUAI') badgeClass = 'bg-success';
+        else if (status === 'UNDERPAID') badgeClass = 'bg-warning';
+        else if (status === 'OVERPAID') badgeClass = 'bg-danger';
+        $('#d-status').text(status).removeClass().addClass('badge ' + badgeClass);
+
+        $('#d-paytypes').text(row.payment_types || '-');
+
+        // Fill detail rows if provided, otherwise fetch via AJAX
+        const $tbody = $('#d-rows').empty();
+        function renderDetails(details) {
+            if (Array.isArray(details) && details.length) {
+                details.forEach(it => {
+                    $tbody.append(`
+                        <tr>
+                        <td>${it.item_index ?? ''}</td>
+                        <td>${it.payment_type ?? ''}</td>
+                        <td>${fmtIDR(it.amount ?? 0)}</td>
+                        <td>${it.bank ?? ''}</td>
+                        <td>${it.bank_doc ?? ''}</td>
+                        <td>${it.bank_due ?? ''}</td>
+                        </tr>
+                    `);
+                });
+            } else {
+                $tbody.append('<tr><td colspan="6" class="text-muted">No details</td></tr>');
+            }
+        }
+
+        if (Array.isArray(row.details) && row.details.length) {
+            renderDetails(row.details);
+        } else if (row.doc_id) {
+            // Use Laravel route helper for details
+            const detailsUrl = "{{ url('api/transactions') }}/" + row.doc_id + "/details";
+            $.getJSON(detailsUrl, function(resp) {
+                renderDetails(resp.details || []);
+            }).fail(function() {
+                $tbody.append('<tr><td colspan="6" class="text-danger">Failed to load details</td></tr>');
+            });
+        } else {
+            $tbody.append('<tr><td colspan="6" class="text-muted">No details</td></tr>');
+        }
+
+        new bootstrap.Modal(document.getElementById('modal-detail')).show();
+    }
 
     $(function() {
         @if($isBranchAdmin)
@@ -213,20 +332,27 @@
                 }
             },
             columns: columns,
-            btnDetails: true,
+            btnDetails: false,
             btnActions: false,
             btnApprove: true,
             btnCheckList: @if($isCompanyAdmin) true @else false @endif,
         })
 
-        $(document).on('click', '.btn-details', function() {
-            const code = $(this).data('code')
-
-            if (code) {
-                const routeTemplate = "{{ route("masterTransaction.details", ["transaction" => "-code-"]) }}"
-                window.location.href = routeTemplate.replace('-code-', code)
+        $('#table').on('click', 'tbody tr', function () {
+            const rowData = table.row(this).data()
+            if (rowData) {
+                openDetail(rowData)
             }
         })
+
+        // $(document).on('click', '.btn-details', function() {
+        //     const code = $(this).data('code')
+
+        //     if (code) {
+        //         const routeTemplate = "{{ route("masterTransaction.details", ["transaction" => "-code-"]) }}"
+        //         window.location.href = routeTemplate.replace('-code-', code)
+        //     }
+        // })
 
         $(document).on('click', '.btn-approve', function() {
             const code = $(this).data('code')
@@ -346,42 +472,6 @@
                 return
             }
 
-            // if (!checkBoxState.is(':checked')) {
-            //     Swal.fire({
-            //         title: "Batalkan Recheck?",
-            //         text: `Yakin ingin membatalkan recheck pada transaksi ${code}?`,
-            //         icon: "question",
-            //         showCancelButton: true,
-            //         confirmButtonText: "Ya, batalkan",
-            //         cancelButtonText: "Jangan batalkan",
-            //     }).then((result) => {
-            //         if (!result.isConfirmed) {
-            //             checkBoxState.prop('checked', true) // revert checkbox state
-            //             return
-            //         }
-
-            //         let url = "{{ route("masterTransaction.unrecheck", ["transaction" => "-code-"]) }}".replace("-code-", code)
-
-            //         ajaxPost({
-            //             url: url,
-            //             formData: {
-            //                 action: "unrecheck",
-            //                 actual_nominal: paidAmount,
-            //                 doc_id: code,
-            //             },
-            //             successCallback: function (response) {
-            //                 if (response.success) {
-            //                     Swal.fire("Berhasil!", "Recheck pada transaksi " + code + " berhasil dibatalkan." || response.message, "success")
-            //                     table.ajax.reload()
-            //                 }
-            //             },
-            //             errorCallback: function (response) {
-            //                 Swal.fire("Gagal!", "Recheck pada transaksi " + code + " gagal dibatalkan." || response.message, "error")
-            //                 checkBoxState.prop('checked', true) // revert checkbox state
-            //             }
-            //         })
-            //     })
-            // } else {
             Swal.fire({
                 title: "Recheck Transaksi?",
                 text: `Yakin ingin menandai transaksi ${code} sebagai sudah dicek ulang?`,
