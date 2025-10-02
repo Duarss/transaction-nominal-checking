@@ -131,9 +131,9 @@
             </table>
         </div>
 
-        @slot('footer')
+        {{-- @slot('footer')
             <x-button id="btn-open-trx" title="Open Document" class="btn-outline-primary btn-sm" icon="bx bx-link-external"/>
-        @endslot
+        @endslot --}}
     </x-modal>
 @endsection
 

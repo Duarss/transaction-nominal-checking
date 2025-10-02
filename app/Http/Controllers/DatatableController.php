@@ -228,6 +228,14 @@ class DatatableController extends Controller
                     ->where('is_approved', 1); // Always only approved
             }
         } else if ($isBranchAdmin) {
+            $branch = Branch::where('branch_admin', $user->code)->first();
+            if ($branch) {
+                $query->where('branch_code', $branch->code);
+            } else {
+                // No branch assigned, return empty
+                $query->whereRaw('1=0');
+            }
+            
             $approval = $request->input('approval');
             if ($approval === 'true') {
                 $query->where('is_approved', 1);

@@ -111,17 +111,21 @@ class TransactionService
 
     public function update(Transaction $transaction, array $request)
     {
+        $data = $this->fetch($request);
+
         $oldPaidAmount = $transaction->paid_amount;
 
-        $transaction->update([
-            'paid_amount' => $request['actual_nominal'],
-            'last_updated' => now(),
-            'updated_by' => auth()->user()->code,
-        ]);
+        $updated = Transaction::where('doc_id', $data->transaction['doc_id'])
+            ->update([
+                'paid_amount' => $request['actual_nominal'],
+                'last_updated' => now(),
+                'updated_by' => auth()->user()->code,
+            ]);
 
-        if ($transaction) {
+        if ($updated) {
+            $trx = Transaction::where('doc_id', $data->transaction['doc_id'])->first();
             ActionLog::create([
-                'transaction_code' => $transaction->doc_id,
+                'transaction_code' => $trx->doc_id,
                 'nominal_before' => $oldPaidAmount,
                 'nominal_after' => $request['actual_nominal'],
                 'status' => 'updated',
