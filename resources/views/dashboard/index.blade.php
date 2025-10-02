@@ -18,7 +18,7 @@
         </div>
     </div>
 
-    @if(isset($branchName) && $branchName)
+    @if($role === 'branch_admin' && isset($branchName) && $branchName)
         <div class="mb-2 mt-3">
             <span class="badge bg-dark fs-6">
                 <strong>{{ $branchName }}</strong>
@@ -138,22 +138,8 @@
 @endsection
 
 @push('js')
-    <style>
-        .btn-icon { 
-            width: 2.25rem;  /* ~36px, matches .btn-sm nicely */
-            height: 2.25rem;
-            padding: 0 !important;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            line-height: 1;  /* avoid any vertical misalignment */
-        }
-        .btn-icon i { line-height: 1; }
-        /* Make summary cards feel consistent */
-        .card .h4 { margin: 0; }
-    </style>
-    <script>
-        const fmtIDR = (n) => new Intl.NumberFormat('en-US',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n||0))
+<script>
+    const fmtIDR = (n) => new Intl.NumberFormat('en-US',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n||0))
 
         function q() {
             return {
@@ -309,11 +295,6 @@
                 refreshSummary()
                 swalToast.fire({ title: 'Berhasil refresh tabel!', icon: 'success' })
             });
-
-            $('#btn-export').on('click', () => {
-                const params = new URLSearchParams(q())
-                window.location.href = '{{ route('datatables.transactions.export.csv') }}?' + params.toString()
-            })
         })
-    </script>
+</script>
 @endpush
