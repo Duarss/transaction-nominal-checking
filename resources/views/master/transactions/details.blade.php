@@ -24,16 +24,16 @@
         let scrollY = '74vh'
         const columns = [
             {
-                title: "Item Index",
+                title: "Index Barang",
                 data: "item_index",
                 className: "text-center",
             },
             {
-                title: "Payment Type",
+                title: "Tipe Pembayaran",
                 data: "payment_type",
             },
             {
-                title: "Amount",
+                title: "Nominal",
                 data: "amount",
                 render: function(data, type, row) {
                     if (!data) return '-';
@@ -45,15 +45,15 @@
                 data: "bank",
             },
             {
-                title: "Bank Doc",
+                title: "Dokumen Bank",
                 data: "bank_doc",
             },
             {
-                title: "Bank Due",
+                title: "Tenggat Bank",
                 data: "bank_due",
             },
             {
-                title: "Location",
+                title: "Lokasi",
                 data: "location",
             }
         ]
