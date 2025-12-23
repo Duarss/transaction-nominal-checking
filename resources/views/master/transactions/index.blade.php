@@ -111,138 +111,240 @@
 
 @push('js')
 <script>
+    // Load AutoNumeric dynamically if not already loaded
+    function loadAutoNumeric() {
+        return new Promise((resolve, reject) => {
+            if (typeof AutoNumeric !== 'undefined') {
+                console.log('AutoNumeric already loaded');
+                resolve();
+                return;
+            }
+            
+            console.log('Loading AutoNumeric dynamically...');
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/autonumeric@4.6.0';
+            script.onload = () => {
+                console.log('AutoNumeric loaded successfully');
+                resolve();
+            };
+            script.onerror = () => {
+                console.error('Failed to load AutoNumeric');
+                reject(new Error('Failed to load AutoNumeric library'));
+            };
+            document.head.appendChild(script);
+        });
+    }
+    
+    // Basic fallback formatting function
+    function setupFallbackFormatting(selector) {
+        $(selector).on('focus', function() {
+            let rawValue = $(this).val().replace(/[^\d]/g, '');
+            $(this).val(rawValue);
+        }).on('blur', function() {
+            let value = $(this).val().replace(/[^\d]/g, '');
+            if (value) {
+                // Format as Indonesian Rupiah
+                let formatted = new Intl.NumberFormat('id-ID', {
+                    style: 'currency',
+                    currency: 'IDR',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                }).format(value);
+                $(this).val(formatted);
+            }
+        });
+    }
+    
+    // Get AutoNumeric value with fallback
+    function getAutoNumericValue(selector) {
+        if (typeof AutoNumeric !== 'undefined') {
+            const element = AutoNumeric.getAutoNumericElement(selector);
+            if (element) {
+                return element.getNumber();
+            }
+        }
+        
+        // Fallback: parse from input value
+        const value = $(selector).val().replace(/[^\d]/g, '');
+        return value ? parseFloat(value) : 0;
+    }
+    
+    // Set AutoNumeric value with fallback
+    function setAutoNumericValue(selector, value) {
+        if (typeof AutoNumeric !== 'undefined') {
+            const element = AutoNumeric.getAutoNumericElement(selector);
+            if (element) {
+                element.set(value);
+                return true;
+            }
+        }
+        
+        // Fallback: format as IDR
+        const formatted = new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(value || 0);
+        $(selector).val(formatted);
+        return false;
+    }
+
     const title = '{{ $title }}'
     let dataTransaction
 
-    @if($isBranchAdmin)
-    select2Init({
-        selector: "#filter-approval",
-        url: "{{ route("select2.filter-transactions-branch-admin") }}",
-        method: "POST",
-        placeholder: "--Pilih status approval--",
-        allowClear: true,
-    })
+    // Main initialization wrapped in AutoNumeric loading
+    $(function() {
+        loadAutoNumeric().then(() => {
+            // AutoNumeric loaded successfully
+            console.log('Initializing with AutoNumeric...');
+            
+            @if($isBranchAdmin)
+            autoNumericInit({
+                selector: "#actual_nominal",
+                isCurrency: true,
+                currencySymbol: 'Rp ',
+            })
+            @endif
+            
+            // Continue with the rest of your initialization
+            initializeApp();
+            
+        }).catch(error => {
+            // AutoNumeric failed to load, use fallback
+            console.warn('Using fallback formatting:', error.message);
+            
+            @if($isBranchAdmin)
+            setupFallbackFormatting("#actual_nominal");
+            @endif
+            
+            // Continue with the rest of your initialization
+            initializeApp();
+        });
+    });
+    
+    function initializeApp() {
+        @if($isBranchAdmin)
+        select2Init({
+            selector: "#filter-approval",
+            url: "{{ route("select2.filter-transactions-branch-admin") }}",
+            method: "POST",
+            placeholder: "--Pilih status approval--",
+            allowClear: true,
+        })
 
-    // call after select2 is initialized
-    setDefault()
+        // call after select2 is initialized
+        setDefault()
 
-    $(document).on('change select2:select select2:clear', '#filter-approval', function () {
-        table.ajax.reload(null, true)
-    })
+        $(document).on('change select2:select select2:clear', '#filter-approval', function () {
+            table.ajax.reload(null, true)
+        })
 
-    @elseif($isCompanyAdmin)
-    select2Init({
-        selector: "#filter-recheck",
-        url: "{{ route("select2.filter-transactions-company-admin") }}",
-        method: "POST",
-        placeholder: "--Pilih status pengecekan ulang--",
-        allowClear: true,
-    })
+        @elseif($isCompanyAdmin)
+        select2Init({
+            selector: "#filter-recheck",
+            url: "{{ route("select2.filter-transactions-company-admin") }}",
+            method: "POST",
+            placeholder: "--Pilih status pengecekan ulang--",
+            allowClear: true,
+        })
 
-    // call after select2 is initialized
-    setDefault()
+        // call after select2 is initialized
+        setDefault()
 
-    $(document).on('change select2:select select2:clear', '#filter-recheck', function () {
-        table.ajax.reload(null, true)
-    })
-    @endif
+        $(document).on('change select2:select select2:clear', '#filter-recheck', function () {
+            table.ajax.reload(null, true)
+        })
+        @endif
 
-    @if($isBranchAdmin)
-    function setDefault() {
-        const $el = $('#filter-approval')
-        if ($el.find('option[value="false"]').length === 0) {
-            $el.append(new Option('Belum Disetujui', 'false', true, true))
+        @if($isBranchAdmin)
+        function setDefault() {
+            const $el = $('#filter-approval')
+            if ($el.find('option[value="false"]').length === 0) {
+                $el.append(new Option('Belum Disetujui', 'false', true, true))
+            }
+            $el.val('false').trigger('change')
         }
-        $el.val('false').trigger('change')
-    }
-    @elseif($isCompanyAdmin)
-    function setDefault() {
-        const $el = $('#filter-recheck')
-        if ($el.find('option[value="false"]').length === 0) {
-            $el.append(new Option('Belum Dicek Ulang', 'false', true, true))
+        @elseif($isCompanyAdmin)
+        function setDefault() {
+            const $el = $('#filter-recheck')
+            if ($el.find('option[value="false"]').length === 0) {
+                $el.append(new Option('Belum Dicek Ulang', 'false', true, true))
+            }
+            $el.val('false').trigger('change')
         }
-        $el.val('false').trigger('change')
-    }
-    @endif
+        @endif
 
-    function fmtIDR(n) {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(n || 0));
-    }
+        function fmtIDR(n) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(n || 0));
+        }
 
-    function computeStatus(total, paid) {
-        if (paid > total) return 'OVERPAID';
-        if (paid < total) return 'UNDERPAID';
-        return 'SESUAI';
-    }
+        function computeStatus(total, paid) {
+            if (paid > total) return 'OVERPAID';
+            if (paid < total) return 'UNDERPAID';
+            return 'SESUAI';
+        }
 
-    function openDetail(row) {
-        $('#d-doc').text(row.doc_id || '-');
-        $('#d-date').text(row.date ? toShortDateTime(row.date) : '-');
-        $('#d-branch').text(row.branch_name || row.branch_code || '-');
-        $('#d-sales').text(row.sales_name || row.sales_code || '-');
-        $('#d-customer').text(row.customer_name || row.customer_code || '-');
+        function openDetail(row) {
+            $('#d-doc').text(row.doc_id || '-');
+            $('#d-date').text(row.date ? toShortDateTime(row.date) : '-');
+            $('#d-branch').text(row.branch_name || row.branch_code || '-');
+            $('#d-sales').text(row.sales_name || row.sales_code || '-');
+            $('#d-customer').text(row.customer_name || row.customer_code || '-');
 
-        const total = Number(row.total || 0), paid = Number(row.paid_amount || 0), disc = Number(row.discrepancy ?? (paid - total));
-        $('#d-total').text(fmtIDR(total));
-        $('#d-paid').text(fmtIDR(paid));
-        $('#d-disc').text(fmtIDR(disc));
+            const total = Number(row.total || 0), paid = Number(row.paid_amount || 0), disc = Number(row.discrepancy ?? (paid - total));
+            $('#d-total').text(fmtIDR(total));
+            $('#d-paid').text(fmtIDR(paid));
+            $('#d-disc').text(fmtIDR(disc));
 
-        // Add color for status
-        const status = computeStatus(total, paid);
-        let badgeClass = 'bg-secondary';
-        if (status === 'SESUAI') badgeClass = 'bg-success';
-        else if (status === 'UNDERPAID') badgeClass = 'bg-warning';
-        else if (status === 'OVERPAID') badgeClass = 'bg-danger';
-        $('#d-status').text(status).removeClass().addClass('badge ' + badgeClass);
+            // Add color for status
+            const status = computeStatus(total, paid);
+            let badgeClass = 'bg-secondary';
+            if (status === 'SESUAI') badgeClass = 'bg-success';
+            else if (status === 'UNDERPAID') badgeClass = 'bg-warning';
+            else if (status === 'OVERPAID') badgeClass = 'bg-danger';
+            $('#d-status').text(status).removeClass().addClass('badge ' + badgeClass);
 
-        $('#d-paytypes').text(row.payment_types || '-');
+            $('#d-paytypes').text(row.payment_types || '-');
 
-        // Fill detail rows if provided, otherwise fetch via AJAX
-        const $tbody = $('#d-rows').empty();
-        function renderDetails(details) {
-            if (Array.isArray(details) && details.length) {
-                details.forEach(it => {
-                    $tbody.append(`
-                        <tr>
-                        <td>${it.item_index ?? ''}</td>
-                        <td>${it.payment_type ?? ''}</td>
-                        <td>${fmtIDR(it.amount ?? 0)}</td>
-                        <td>${it.bank ?? ''}</td>
-                        <td>${it.bank_doc ?? ''}</td>
-                        <td>${it.bank_due ?? ''}</td>
-                        </tr>
-                    `);
+            // Fill detail rows if provided, otherwise fetch via AJAX
+            const $tbody = $('#d-rows').empty();
+            function renderDetails(details) {
+                if (Array.isArray(details) && details.length) {
+                    details.forEach(it => {
+                        $tbody.append(`
+                            <tr>
+                            <td>${it.item_index ?? ''}</td>
+                            <td>${it.payment_type ?? ''}</td>
+                            <td>${fmtIDR(it.amount ?? 0)}</td>
+                            <td>${it.bank ?? ''}</td>
+                            <td>${it.bank_doc ?? ''}</td>
+                            <td>${it.bank_due ?? ''}</td>
+                            </tr>
+                        `);
+                    });
+                } else {
+                    $tbody.append('<tr><td colspan="6" class="text-muted">No details</td></tr>');
+                }
+            }
+
+            if (Array.isArray(row.details) && row.details.length) {
+                renderDetails(row.details);
+            } else if (row.doc_id) {
+                // Use Laravel route helper for details
+                const detailsUrl = "{{ url('api/transactions') }}/" + row.doc_id + "/details";
+                $.getJSON(detailsUrl, function(resp) {
+                    renderDetails(resp.details || []);
+                }).fail(function() {
+                    $tbody.append('<tr><td colspan="6" class="text-danger">Failed to load details</td></tr>');
                 });
             } else {
                 $tbody.append('<tr><td colspan="6" class="text-muted">No details</td></tr>');
             }
+
+            new bootstrap.Modal(document.getElementById('modal-detail')).show();
         }
 
-        if (Array.isArray(row.details) && row.details.length) {
-            renderDetails(row.details);
-        } else if (row.doc_id) {
-            // Use Laravel route helper for details
-            const detailsUrl = "{{ url('api/transactions') }}/" + row.doc_id + "/details";
-            $.getJSON(detailsUrl, function(resp) {
-                renderDetails(resp.details || []);
-            }).fail(function() {
-                $tbody.append('<tr><td colspan="6" class="text-danger">Failed to load details</td></tr>');
-            });
-        } else {
-            $tbody.append('<tr><td colspan="6" class="text-muted">No details</td></tr>');
-        }
-
-        new bootstrap.Modal(document.getElementById('modal-detail')).show();
-    }
-
-    $(function() {
-        @if($isBranchAdmin)
-        autoNumericInit({
-            selector: "#actual_nominal",
-            isCurrency: true,
-            currencySymbol: 'Rp ',
-        })
-        @endif
         let scrollY = '74vh'
         const columns = [
             {
@@ -344,15 +446,6 @@
             }
         })
 
-        // $(document).on('click', '.btn-details', function() {
-        //     const code = $(this).data('code')
-
-        //     if (code) {
-        //         const routeTemplate = "{{ route("masterTransaction.details", ["transaction" => "-code-"]) }}"
-        //         window.location.href = routeTemplate.replace('-code-', code)
-        //     }
-        // })
-
         $(document).on('click', '.btn-approve', function() {
             const code = $(this).data('code')
             const total = table.row($(this).closest('tr')).data().total
@@ -364,10 +457,8 @@
 
             @if($isBranchAdmin)
             $("#modal-approve-nominal").on('shown.bs.modal', function () {
-                autoNumericVal({
-                    selector: "#actual_nominal",
-                    value: paidAmount,
-                })
+                // Use our unified function to set value
+                setAutoNumericValue("#actual_nominal", paidAmount);
                 $("#actual_nominal").trigger('focus')
             })
             @endif
@@ -377,7 +468,7 @@
 
             // "Simpan" button: update paid nominal, status "UPDATED"
             $("#btn-save-edit").off('click').on('click', function() {
-                const actualNominal = AutoNumeric.getAutoNumericElement("#actual_nominal").getNumber()
+                const actualNominal = getAutoNumericValue("#actual_nominal");
                 if (!actualNominal) {
                     Swal.fire("Gagal!", "Nominal fisik harus diisi.", "error")
                     return
@@ -386,7 +477,7 @@
                 
                 Swal.fire({
                     title: "Lanjutkan?",
-                    text: "Ingin ubah nominal transaksi " + code + " menjadi " + new Intl.NumberFormat('en-US', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(actualNominal) + "?",
+                    text: "Ingin ubah nominal transaksi " + code + " menjadi " + fmtIDR(actualNominal) + "?",
                     icon: "question",
                     showCancelButton: true,
                     confirmButtonText: "Ya, lanjutkan",
@@ -420,7 +511,7 @@
             })
 
             $("#btn-validate").off('click').on('click', function() {
-                const actualNominal = AutoNumeric.getAutoNumericElement("#actual_nominal").getNumber()
+                const actualNominal = getAutoNumericValue("#actual_nominal");
                 if (!actualNominal) {
                     Swal.fire("Gagal!", "Nominal fisik harus diisi.", "error")
                     return
@@ -429,7 +520,7 @@
 
                 Swal.fire({
                     title: "Lanjutkan?",
-                    text: "Ingin validasi transaksi " + code + " dengan nominal fisik " + new Intl.NumberFormat('en-US', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(actualNominal) + "?",
+                    text: "Ingin validasi transaksi " + code + " dengan nominal fisik " + fmtIDR(actualNominal) + "?",
                     icon: "question",
                     showCancelButton: true,
                     confirmButtonText: "Ya, lanjutkan",
@@ -506,7 +597,6 @@
                     }
                 })
             })
-            // }
         })
 
         $(document).on('click', '#btn-refresh', function() {
@@ -515,6 +605,6 @@
                 swalToast.fire({ title: 'Berhasil refresh tabel!', icon: 'success' })
             }
         })
-    })
+    }
 </script>
 @endpush

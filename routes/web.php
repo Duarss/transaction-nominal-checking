@@ -74,8 +74,10 @@ Route::middleware(['auth', 'web'])->group(function () {
     Route::group(['prefix' => 'datatables', 'as' => 'datatables.'], function () {
         Route::match(['GET','POST'], '/transactions/nominal/list', [DatatableController::class, 'transactionNominalList'])
             ->name('transactions.nominal.list');
-        Route::get('/transactions/export/csv',   [ExportController::class, 'transactionsCsv'])
-            ->name('transactions.export.csv');
+        Route::get('/transactions/export/xlsx',   [ExportController::class, 'transactionsXlsx'])
+            ->name('transactions.export.xlsx');
+        Route::get('/transactions/export/pdf', [ExportController::class, 'transactionsPdf'])
+            ->name('transactions.export.pdf');
         Route::post('main-action-log', [DatatableController::class, 'actionLog'])->name('main-action-log');
         Route::post('master-branch', [DatatableController::class, 'masterBranch'])->name('master-branch');
         Route::post('master-store', [DatatableController::class, 'masterStore'])->name('master-store');

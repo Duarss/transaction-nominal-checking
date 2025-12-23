@@ -71,7 +71,25 @@
 
     <div class="card mt-3">
         <div class="card-body">
-            <table id="trx-table" class="table table-striped w-100"></table>
+            {{-- Use the table component with use-datatable --}}
+            <x-table use-datatable id="trx-table">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Doc ID</th>
+                        <th>Pelanggan</th>
+                        <th>Tanggal</th>
+                        <th>Sales</th>
+                        <th>Total</th>
+                        <th>Terbayar</th>
+                        <th>Δ</th>
+                        <th>Metode Pembayaran</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{-- Data will be loaded via AJAX --}}
+                </tbody>
+            </x-table>
         </div>
     </div> 
 @endsection
@@ -129,30 +147,17 @@
                 <tbody id="d-rows"><tr><td colspan="6" class="text-muted">Data Belum Ada</td></tr></tbody>
             </table>
         </div>
-
-        {{-- @slot('footer')
-            <x-button id="btn-open-trx" title="Open Document" class="btn-outline-primary btn-sm" icon="bx bx-link-external"/>
-        @endslot --}}
     </x-modal>
 @endsection
 
 @push('js')
 <script>
-    const fmtIDR = (n) => new Intl.NumberFormat('en-US',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n||0))
-
-        function q() {
-            return {
-                date_range: $('#filter-date-range').val() || '',
-                status:     $('#filter-status').val() || '',       // computed on server: paid/pending/overpaid
-                method:     $('#filter-method').val() || '',       // filters detail_transactions.payment_type
-                min_total:  AutoNumeric.getAutoNumericElement('#filter-min')?.getNumber() ?? '',
-                max_total:  AutoNumeric.getAutoNumericElement('#filter-max')?.getNumber() ?? '',
-            }
-        }
+    $(function() {
+        const fmtIDR = (n) => new Intl.NumberFormat('en-US',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n||0))
 
         function refreshSummary() {
             ajaxGet({
-                url: '{{ route('dashboard.summary') }}?' + new URLSearchParams(q()),
+                url: '{{ route('dashboard.summary') }}',
                 loading: true,
                 successCallback: (s) => {
                     $('#sum-total .h4').text(fmtIDR(s.total_amount ?? 0))
@@ -162,138 +167,187 @@
             })
         }
 
-        // DataTable (columns aligned to migrations)
-        let dt;
-        function buildTable() {
-            dt = dataTableInit({
-                selector: '#trx-table',
-                title: 'Transaction Nominal',
-                pageLength: 10,
-                btnTools: true, btnExcel: true, btnPdf: true,
-                rowIndex: true,
-                order: [[2, 'desc']], // by date desc
-                columns: [
-                    { data: 'doc_id',       name: 'doc_id',       title: 'Doc ID' },
-                    { data: 'customer_name',name: 'customer_name',title: 'Pelanggan' },  // join from stores.code
-                    { data: 'date',         name: 'date',         title: 'Tanggal', render: d => {
+        // Initialize DataTable - DataTables is already loaded by the table component
+        let trxTable = dataTableInit({
+            selector: '#trx-table',
+            title: 'Transaction Nominal',
+            pageLength: 10,
+            btnTools: true, 
+            btnExcel: false, 
+            btnPdf: false,
+            rowIndex: true,
+            order: [[3, 'desc']], // Order by date (4th column, 0-indexed)
+            columns: [
+                { data: 'doc_id', title: 'Doc ID' },
+                { data: 'customer_name', title: 'Pelanggan' },
+                { 
+                    data: 'date', title: 'Tanggal', 
+                    render: function(d) {
                         if (!d) return '-'
                         const dateObj = new Date(d)
                         const year = dateObj.getFullYear()
                         const month = dateObj.toLocaleString('en-US', { month: 'short' })
-                        const day = String(dateObj.getDate()).padStart(2, '0') // always two digits
+                        const day = String(dateObj.getDate()).padStart(2, '0')
                         return `${day} ${month} ${year}`
-                    }},
-                    // { data: 'branch_name',  name: 'branch_name',  title: 'Branch' },    // join from branches.code
-                    { data: 'sales_name',   name: 'sales_name',   title: 'Sales' },     // join from users.code
-                    { data: 'total',        name: 'total',        title: 'Total', render: d => {
-                        if (!d) return '-';
-                        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(d);
-                    }},
-                    { data: 'paid_amount',  name: 'paid_amount',  title: 'Terbayar', render: d => {
-                        if (!d) return '-';
-                        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(d);
-                    }},
-                    { data: 'discrepancy',  name: 'discrepancy',  title: 'Δ', render: d => {
+                    }
+                },
+                { data: 'sales_name', title: 'Sales' },
+                { 
+                    data: 'total', title: 'Total', 
+                    render: function(d) {
+                        return d ? fmtIDR(d) : '-'
+                    }
+                },
+                { 
+                    data: 'paid_amount', title: 'Terbayar', 
+                    render: function(d) {
+                        return d ? fmtIDR(d) : '-'
+                    }
+                },
+                { 
+                    data: 'discrepancy', title: 'Δ', 
+                    render: function(d) {
                         const v = Number(d||0)
                         const c = v===0?'text-success':(v>0?'text-danger':'text-warning')
                         return `<span class="${c}">${fmtIDR(v)}</span>`
-                    }},
-                    { data: 'method',name: 'method',title: 'Metode Pembayaran' },   // e.g. "tunai, transfer"
-                ],
-                ajax: {
-                    url: '{{ route('datatables.transactions.nominal.list') }}',
-                    data: function(d){ return Object.assign(d, q()) }
+                    }
                 },
-                btnDetails: false,
-                btnActions: false,
-                btnApprove: false,
-                btnCheckList: false,
-            })
+                { data: 'method', title: 'Metode Pembayaran' },
+            ],
+            ajax: {
+                url: '{{ route('datatables.transactions.nominal.list') }}'
+            },
+            buttons: [
+                {
+                    extend: 'excelHtml5',
+                    title: 'transaksi-' + new Date().toISOString().slice(0, 10).replace(/-/g, '-'), // Dynamic date
+                    className: 'btn-sm btn-outline-secondary',
+                    text: "<i class='bx bx-spreadsheet' style='color: #1d6f42'></i>",
+                    titleAttr: 'Export Excel',
+                    exportOptions: {
+                        columns: ':not(.no-export)'
+                    },
+                    // Customize filename
+                    filename: function() {
+                        const now = new Date();
+                        const year = now.getFullYear();
+                        const month = String(now.getMonth() + 1).padStart(2, '0');
+                        const day = String(now.getDate()).padStart(2, '0');
+                        const hours = String(now.getHours()).padStart(2, '0');
+                        const minutes = String(now.getMinutes()).padStart(2, '0');
+                        return `transaksi-${year}-${month}-${day}-${hours}-${minutes}`;
+                    }
+                }
+            ],
+            btnDetails: false,
+            btnActions: false,
+            btnApprove: false,
+            btnCheckList: false,
+        })
 
-            // open modal on row click
-            $('#trx-table').on('click', 'tbody tr', function(){
-                const row = dt.row(this).data()
-                if (row) openDetail(row)
-            })
-        }
+        // Open modal on row click
+        $('#trx-table').on('click', 'tbody tr', function() {
+            const rowData = trxTable.row(this).data()
+            if (rowData) openDetail(rowData)
+        })
 
-        function computeStatus(total, paid){
+        function computeStatus(total, paid) {
             if (paid > total) return 'OVERPAID'
             if (paid < total) return 'UNDERPAID'
             return 'SESUAI'
         }
 
-        function openDetail(row){
+        function openDetail(row) {
             $('#d-doc').text(row.doc_id || '-')
-            $('#d-date').text(row.date ? toShortDateTime(row.date) : '-');
+            $('#d-date').text(row.date ? toShortDateTime(row.date) : '-')
             $('#d-branch').text(row.branch_name || row.branch_code || '-')
             $('#d-sales').text(row.sales_name || row.sales_code || '-')
             $('#d-customer').text(row.customer_name || row.customer_code || '-')
 
-            const total = Number(row.total||0), paid = Number(row.paid_amount||0), disc = Number(row.discrepancy ?? (paid-total))
+            const total = Number(row.total || 0)
+            const paid = Number(row.paid_amount || 0)
+            const disc = Number(row.discrepancy ?? (paid - total))
+            
             $('#d-total').text(fmtIDR(total))
             $('#d-paid').text(fmtIDR(paid))
             $('#d-disc').text(fmtIDR(disc))
 
-            // Add color for status
             const status = computeStatus(total, paid)
             let badgeClass = 'bg-secondary'
             if (status === 'SESUAI') badgeClass = 'bg-success'
             else if (status === 'UNDERPAID') badgeClass = 'bg-warning'
             else if (status === 'OVERPAID') badgeClass = 'bg-danger'
+            
             $('#d-status').text(status).removeClass().addClass('badge ' + badgeClass)
 
-            $('#d-paytypes').text(row.payment_types || '-')
-
-            // Fill detail rows if provided, otherwise fetch via AJAX
-            const $tbody = $('#d-rows').empty();
-            function renderDetails(details) {
-                if (Array.isArray(details) && details.length) {
-                    details.forEach(it => {
-                        $tbody.append(`
-                            <tr>
-                            <td>${it.item_index ?? ''}</td>
-                            <td>${it.payment_type ?? ''}</td>
-                            <td>${fmtIDR(it.amount ?? 0)}</td>
-                            <td>${it.bank ?? ''}</td>
-                            <td>${it.bank_doc ?? ''}</td>
-                            <td>${it.bank_due ?? ''}</td>
-                            </tr>
-                        `)
-                    })
-                } else {
-                    $tbody.append('<tr><td colspan="6" class="text-muted">No details</td></tr>')
-                }
-            }
-
-            if (Array.isArray(row.details) && row.details.length) {
-                renderDetails(row.details);
-            } else if (row.doc_id) {
-                // Use Laravel route helper for details
-                const detailsUrl = "{{ url('api/transactions') }}/" + row.doc_id + "/details";
+            const $tbody = $('#d-rows').empty()
+            
+            // If row has details, show them
+            if (row.doc_id) {
+                // Fetch details via AJAX
+                const detailsUrl = "{{ url('api/transactions') }}/" + row.doc_id + "/details"
                 $.getJSON(detailsUrl, function(resp) {
-                    renderDetails(resp.details || [])
+                    if (Array.isArray(resp.details) && resp.details.length) {
+                        resp.details.forEach(it => {
+                            $tbody.append(`
+                                <tr>
+                                    <td>${it.item_index ?? ''}</td>
+                                    <td>${it.payment_type ?? ''}</td>
+                                    <td>${fmtIDR(it.amount ?? 0)}</td>
+                                    <td>${it.bank ?? ''}</td>
+                                    <td>${it.bank_doc ?? ''}</td>
+                                    <td>${it.bank_due ?? ''}</td>
+                                </tr>
+                            `)
+                        })
+                    } else {
+                        $tbody.append('<tr><td colspan="6" class="text-muted">No details available</td></tr>')
+                    }
                 }).fail(function() {
                     $tbody.append('<tr><td colspan="6" class="text-danger">Failed to load details</td></tr>')
                 })
             } else {
-                $tbody.append('<tr><td colspan="6" class="text-muted">No details</td></tr>')
+                $tbody.append('<tr><td colspan="6" class="text-muted">No details available</td></tr>')
             }
 
-            $('#btn-open-trx').off('click').on('click', () => row.show_url && (window.location.href = row.show_url))
             new bootstrap.Modal(document.getElementById('modal-detail')).show()
         }
 
-        // Boot
-        document.addEventListener('DOMContentLoaded', () => {
-            buildTable()
-            refreshSummary()
+        // Initial load
+        refreshSummary()
 
-            $('#btn-filter, #btn-refresh').on('click', () => {
-                dt && dt.ajax.reload()
-                refreshSummary()
-                swalToast.fire({ title: 'Berhasil refresh tabel!', icon: 'success' })
-            });
+        $('#trx-table_wrapper .dt-buttons').append(`
+            <button class="btn btn-sm btn-outline-secondary dt-button" title="Export PDF" id="custom-pdf-export">
+                <i class="bx bxs-file-pdf" style="color: #f40f02"></i>
+            </button>
+        `);
+
+        $('#custom-pdf-export').on('click', function() {
+            // Get current filters
+            const params = new URLSearchParams();
+            
+            // Add dashboard filters
+            if ($('#filter-status').val()) {
+                params.append('status', $('#filter-status').val());
+            }
+            if ($('#filter-method').val()) {
+                params.append('method', $('#filter-method').val());
+            }
+            if ($('#filter-date-range').val()) {
+                params.append('date_range', $('#filter-date-range').val());
+            }
+            
+            // Open server-side PDF export
+            const url = '{{ route("datatables.transactions.export.pdf") }}?' + params.toString();
+            window.open(url, '_blank');
+        });
+
+        // Refresh button
+        $('#btn-refresh').on('click', () => {
+            trxTable.ajax.reload()
+            refreshSummary()
+            swalToast.fire({ title: 'Berhasil refresh tabel!', icon: 'success' })
         })
+    })
 </script>
 @endpush
