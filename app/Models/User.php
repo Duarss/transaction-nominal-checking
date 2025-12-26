@@ -45,15 +45,13 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-    public function salesmen()
-    {
-        return $this->hasMany(Transaction::class, 'sales_code', 'code');
-    }
-
     public function branchAdmin()
     {
         return $this->belongsTo(Branch::class, 'branch_admin', 'code');
     }
 
-
+    public function getRouteKeyName(): string
+    {
+        return 'code';
+    }
 }

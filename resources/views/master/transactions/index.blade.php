@@ -377,6 +377,7 @@
             {
                 title: "Nominal Dibayar",
                 data: "paid_amount",
+                className: "text-center",
                 render: function(data, type, row) {
                     if (!data) return '-';
                     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(data);

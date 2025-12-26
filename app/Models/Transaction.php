@@ -34,11 +34,6 @@ class Transaction extends Model
         return $this->belongsTo(Branch::class, 'branch_code', 'code');
     }
 
-    public function sales()
-    {
-        return $this->belongsTo(User::class, 'sales_code', 'code');
-    }
-
     public function customer()
     {
         return $this->belongsTo(Store::class, 'customer_code', 'code');

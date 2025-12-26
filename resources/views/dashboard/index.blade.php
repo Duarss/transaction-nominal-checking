@@ -217,28 +217,28 @@
             ajax: {
                 url: '{{ route('datatables.transactions.nominal.list') }}'
             },
-            buttons: [
-                {
-                    extend: 'excelHtml5',
-                    title: 'transaksi-' + new Date().toISOString().slice(0, 10).replace(/-/g, '-'), // Dynamic date
-                    className: 'btn-sm btn-outline-secondary',
-                    text: "<i class='bx bx-spreadsheet' style='color: #1d6f42'></i>",
-                    titleAttr: 'Export Excel',
-                    exportOptions: {
-                        columns: ':not(.no-export)'
-                    },
-                    // Customize filename
-                    filename: function() {
-                        const now = new Date();
-                        const year = now.getFullYear();
-                        const month = String(now.getMonth() + 1).padStart(2, '0');
-                        const day = String(now.getDate()).padStart(2, '0');
-                        const hours = String(now.getHours()).padStart(2, '0');
-                        const minutes = String(now.getMinutes()).padStart(2, '0');
-                        return `transaksi-${year}-${month}-${day}-${hours}-${minutes}`;
-                    }
-                }
-            ],
+            // buttons: [
+            //     {
+            //         extend: 'excelHtml5',
+            //         title: 'transaksi-' + new Date().toISOString().slice(0, 10).replace(/-/g, '-'), // Dynamic date
+            //         className: 'btn-sm btn-outline-secondary',
+            //         text: "<i class='bx bx-spreadsheet' style='color: #1d6f42'></i>",
+            //         titleAttr: 'Export Excel',
+            //         exportOptions: {
+            //             columns: ':not(.no-export)'
+            //         },
+            //         // Customize filename
+            //         filename: function() {
+            //             const now = new Date();
+            //             const year = now.getFullYear();
+            //             const month = String(now.getMonth() + 1).padStart(2, '0');
+            //             const day = String(now.getDate()).padStart(2, '0');
+            //             const hours = String(now.getHours()).padStart(2, '0');
+            //             const minutes = String(now.getMinutes()).padStart(2, '0');
+            //             return `transaksi-${year}-${month}-${day}-${hours}-${minutes}`;
+            //         }
+            //     }
+            // ],
             btnDetails: false,
             btnActions: false,
             btnApprove: false,
@@ -317,24 +317,69 @@
         refreshSummary()
 
         $('#trx-table_wrapper .dt-buttons').append(`
+            <button class="btn btn-sm btn-outline-secondary dt-button" title="Export Excel" id="custom-excel-export">
+                <i class='bx bx-spreadsheet' style='color: #1d6f42'></i>
+            </button>
             <button class="btn btn-sm btn-outline-secondary dt-button" title="Export PDF" id="custom-pdf-export">
                 <i class="bx bxs-file-pdf" style="color: #f40f02"></i>
             </button>
         `);
 
-        $('#custom-pdf-export').on('click', function() {
-            // Get current filters
+        // Event handler untuk Export Excel (Server-side)
+        $('#custom-excel-export').on('click', function() {
+            // Get current filters from DataTables
             const params = new URLSearchParams();
             
-            // Add dashboard filters
-            if ($('#filter-status').val()) {
-                params.append('status', $('#filter-status').val());
+            // Ambil parameter filter yang sama dengan DataTables
+            const ajaxParams = trxTable.ajax.params();
+            
+            if (ajaxParams) {
+                // Kirim parameter filters
+                if (ajaxParams.status) {
+                    params.append('status', ajaxParams.status);
+                }
+                if (ajaxParams.method) {
+                    params.append('method', ajaxParams.method);
+                }
+                if (ajaxParams.date_range) {
+                    params.append('date_range', ajaxParams.date_range);
+                }
+                
+                // Kirim parameter pencarian jika ada
+                if (ajaxParams.search && ajaxParams.search.value) {
+                    params.append('search[value]', ajaxParams.search.value);
+                }
             }
-            if ($('#filter-method').val()) {
-                params.append('method', $('#filter-method').val());
-            }
-            if ($('#filter-date-range').val()) {
-                params.append('date_range', $('#filter-date-range').val());
+            
+            // Open server-side Excel export
+            const url = '{{ route("datatables.transactions.export.xlsx") }}?' + params.toString();
+                window.open(url, '_blank');
+        });
+
+        // Event handler untuk Export PDF
+        $('#custom-pdf-export').on('click', function() {
+            // Get current filters from DataTables
+            const params = new URLSearchParams();
+            
+            // Ambil parameter filter yang sama dengan DataTables
+            const ajaxParams = trxTable.ajax.params();
+            
+            if (ajaxParams) {
+                // Kirim parameter filters
+                if (ajaxParams.status) {
+                    params.append('status', ajaxParams.status);
+                }
+                if (ajaxParams.method) {
+                    params.append('method', ajaxParams.method);
+                }
+                if (ajaxParams.date_range) {
+                    params.append('date_range', ajaxParams.date_range);
+                }
+                
+                // Kirim parameter pencarian jika ada
+                if (ajaxParams.search && ajaxParams.search.value) {
+                    params.append('search[value]', ajaxParams.search.value);
+                }
             }
             
             // Open server-side PDF export
